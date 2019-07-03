@@ -52,6 +52,8 @@ type Entry struct {
 
 	// The Job to run.
 	Job Job
+
+	Info map[string]interface{}
 }
 
 // byTime is a wrapper for sorting the entry array by time
@@ -97,25 +99,40 @@ type FuncJob func()
 func (f FuncJob) Run() { f() }
 
 // AddFunc adds a func to the Cron to be run on the given schedule.
-func (c *Cron) AddFunc(spec string, cmd func()) error {
-	return c.AddJob(spec, FuncJob(cmd))
+func (c *Cron) AddFunc(spec string, cmd func(), args ...map[string]interface{}) error {
+	return c.AddJob(spec, FuncJob(cmd), args...)
 }
 
 // AddJob adds a Job to the Cron to be run on the given schedule.
-func (c *Cron) AddJob(spec string, cmd Job) error {
+func (c *Cron) AddJob(spec string, cmd Job, args ...map[string]interface{}) error {
 	schedule, err := Parse(spec)
 	if err != nil {
 		return err
 	}
-	c.Schedule(schedule, cmd)
+	if len(args) == 0 {
+		args = []map[string]interface{}{
+			map[string]interface{}{},
+		}
+	}
+
+	args[0]["spec"] = spec
+
+	c.Schedule(schedule, cmd, args...)
 	return nil
 }
 
 // Schedule adds a Job to the Cron to be run on the given schedule.
-func (c *Cron) Schedule(schedule Schedule, cmd Job) {
+func (c *Cron) Schedule(schedule Schedule, cmd Job, args ...map[string]interface{}) {
+	if len(args) == 0 {
+		args = []map[string]interface{}{
+			map[string]interface{}{},
+		}
+	}
+
 	entry := &Entry{
 		Schedule: schedule,
 		Job:      cmd,
+		Info:     args[0],
 	}
 	if !c.running {
 		c.entries = append(c.entries, entry)
@@ -253,6 +270,7 @@ func (c *Cron) entrySnapshot() []*Entry {
 			Next:     e.Next,
 			Prev:     e.Prev,
 			Job:      e.Job,
+			Info:     e.Info,
 		})
 	}
 	return entries
